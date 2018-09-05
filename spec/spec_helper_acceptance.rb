@@ -1,27 +1,22 @@
-require 'beaker-rspec/spec_helper'
-require 'beaker-rspec/helpers/serverspec'
+require 'beaker-rspec'
+require 'beaker-puppet'
+require 'beaker/puppet_install_helper'
+require 'beaker/module_install_helper'
 
-version = ENV['PUPPET_VERSION'] || '1.5.2'
-install_puppet_agent_on(hosts, puppet_agent_version: version)
+run_puppet_install_helper unless ENV['BEAKER_provision'] == 'no'
+install_ca_certs unless ENV['PUPPET_INSTALL_TYPE'] =~ %r{pe}i
+install_module_on(hosts)
+install_module_dependencies_on(hosts)
 
 RSpec.configure do |c|
-  proj_root = File.expand_path(File.join(File.dirname(__FILE__), '..'))
-
+  # Readable test descriptions
   c.formatter = :documentation
-
-  # Configure all nodes in nodeset
-  c.before :suite do
-    # Install module
-    puppet_module_install(source: proj_root, module_name: 'report_hipchat')
-
-    # Install Dependencies
-    hosts.each do |host|
-      on host, puppet('module', 'install', 'puppetlabs-stdlib')
-
-      # needed to test reporting
-      on host, puppet('module', 'install', 'camptocamp-puppetserver')
-      on host, puppet('module', 'install', 'puppetlabs-inifile')
-      on host, puppet('module', 'install', 'puppetlabs-puppetserver_gem')
+  hosts.each do |host|
+    if host[:platform] =~ %r{el-7-x86_64} && host[:hypervisor] =~ %r{docker}
+      on(host, "sed -i '/nodocs/d' /etc/yum.conf")
     end
+    install_module_from_forge('puppet-puppetserver', '>= 3.0.0 < 4.0.0')
+    install_module_from_forge('puppetlabs-inifile', '>= 2.3.0 < 3.0.0')
+    install_module_from_forge('puppetlabs-puppetserver_gem', '>= 1.0.0 < 2.0.0')
   end
 end
